@@ -97,9 +97,30 @@ export class TelegramAdapter extends ChannelAdapter {
       await this.sendPhoto(chatId, png, caption);
     }
 
+    // Prefer the MarkdownV2 rendering: bold section headings and monospace
+    // blocks that keep the score bars aligned on a phone. One unescaped
+    // reserved character makes Telegram reject the whole message, so a parse
+    // failure silently re-sends the plain-text version rather than losing it.
+    const markdown = typeof payload === 'object' ? payload?.markdown : null;
+    if (markdown && await this.sendFormatted(chatId, markdown)) return;
+
     // Telegram caps a message at 4096 characters.
     for (const chunk of chunkText(text, 3900)) {
       await this.call('sendMessage', { chat_id: chatId, text: chunk });
+    }
+  }
+
+  /** @returns {Promise<boolean>} true if the formatted send succeeded. */
+  async sendFormatted(chatId, markdown) {
+    const chunks = balanceFences(chunkText(markdown, 3900));
+    try {
+      for (const chunk of chunks) {
+        await this.call('sendMessage', { chat_id: chatId, text: chunk, parse_mode: 'MarkdownV2' });
+      }
+      return true;
+    } catch (error) {
+      console.warn('[telegram] MarkdownV2 rejected, sending plain text:', error.message);
+      return false;
     }
   }
 
@@ -139,6 +160,22 @@ export class TelegramAdapter extends ChannelAdapter {
   status() {
     return { enabled: this.enabled, connected: this.connected, username: this.username };
   }
+}
+
+/**
+ * Splitting a long message can cut a ``` block in half, and Telegram rejects
+ * a chunk whose fence never closes. Close it at the break and reopen it at the
+ * start of the next chunk, so the block survives the split.
+ */
+function balanceFences(chunks) {
+  let carryOpen = false;
+  return chunks.map((chunk) => {
+    let out = carryOpen ? `\`\`\`\n${chunk}` : chunk;
+    const open = (out.match(/```/g) || []).length % 2 === 1;
+    if (open) out += '\n```';
+    carryOpen = open;
+    return out;
+  });
 }
 
 function chunkText(text, size) {

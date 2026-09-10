@@ -124,7 +124,11 @@ export async function handleMessage(message) {
     { stats },
   );
   session.jd = null; // next JD scores against the same resume
-  return { text: formatResult(result), result: { ...result, stats } };
+  return {
+    text: formatResult(result, 'plain'),
+    markdown: formatResult(result, 'markdown'),
+    result: { ...result, stats },
+  };
 }
 
 async function runMatrix(session) {
@@ -147,6 +151,11 @@ async function runMatrix(session) {
     const parsed = await parseJd(input.text, stats);
     jds.push({ ...parsed, label: betterLabel(input.label, parsed.parsed.role_title), text: input.text });
   }
+  // The whole point of the grid is two versions of ONE person's resume, so
+  // both sides parse to the same name and the grid reads as nonsense unless
+  // we tell them apart. Fall back to what distinguishes them: their skills.
+  disambiguate(resumes, (r) => topSkills(r.parsed));
+  disambiguate(jds, () => '');
 
   const matrix = [];
   for (const resume of resumes) {
@@ -162,48 +171,76 @@ async function runMatrix(session) {
     matrix.push(row);
   }
 
-  const lines = [];
   const best = { score: -1 };
   matrix.forEach((row, i) => row.forEach((score, j) => {
     if (score > best.score) Object.assign(best, { score, resume: resumes[i].label, jd: jds[j].label });
   }));
 
-  lines.push('YOUR FIT GRID', '');
-  // One block per job rather than a wide table: a 5-column table wraps into
-  // nonsense on a phone, and the question is "who wins this job" anyway.
-  jds.forEach((jd, j) => {
-    const column = matrix.map((row) => row[j]);
-    const top = Math.max(...column);
-    lines.push(`${jd.label}`);
-    resumes.forEach((resume, i) => {
-      const score = column[i];
-      const marker = score === top ? '>' : ' ';
-      lines.push(`  ${marker} ${String(score).padStart(3)}/100  ${resume.label}`);
-    });
-    lines.push('');
-  });
-
-  lines.push('-'.repeat(34), 'WHAT THIS TELLS YOU', '');
   const wins = new Map();
   jds.forEach((jd, j) => {
     const column = matrix.map((row) => row[j]);
     const winner = resumes[column.indexOf(Math.max(...column))].label;
     wins.set(winner, (wins.get(winner) || 0) + 1);
   });
-  for (const [label, count] of [...wins.entries()].sort((a, b) => b[1] - a[1])) {
-    lines.push(`  ${label} is your best option for ${count} of the ${jds.length} job${jds.length === 1 ? '' : 's'}.`);
+
+  // One block per job rather than a wide table: a 5-column table wraps into
+  // nonsense on a phone, and the question is "who wins this job" anyway.
+  const grid = jds.map((jd, j) => {
+    const column = matrix.map((row) => row[j]);
+    const top = Math.max(...column);
+    return [
+      jd.label,
+      ...resumes.map((resume, i) => `  ${column[i] === top ? '>' : ' '} ${String(column[i]).padStart(3)}/100  ${resume.label}`),
+    ].join('\n');
+  }).join('\n\n');
+
+  const ranking = [...wins.entries()].sort((a, b) => b[1] - a[1])
+    .map(([label, count]) => `${label} is your best option for ${count} of the ${jds.length} job${jds.length === 1 ? '' : 's'}.`);
+
+  const cost = [
+    `${stats.model_calls} AI call${stats.model_calls === 1 ? '' : 's'} for ${resumes.length} resume${resumes.length === 1 ? '' : 's'} against ${jds.length} job${jds.length === 1 ? '' : 's'}.`,
+    `A tool that scored each pair separately would have made ${resumes.length * jds.length}.`,
+    'We read each document once, then compare the summaries.',
+    ...(stats.cache_hits ? [`${stats.cache_hits} document(s) were already saved, so they cost nothing.`] : []),
+    `Took ${Date.now() - startedAt}ms.`,
+  ];
+
+  const render = (style) => {
+    const S = STYLES[style] || STYLES.plain;
+    return [
+      S.bold('YOUR FIT GRID'),
+      S.esc('A ">" marks the resume that wins each job.'),
+      S.block(grid),
+      S.heading('WHAT THIS TELLS YOU'),
+      ...ranking.map((line) => S.esc(line)),
+      '',
+      S.esc(`Best single match: ${best.resume} for ${best.jd}, at ${best.score}/100.`),
+      S.heading('WHAT IT COST'),
+      ...cost.map((line) => S.esc(line)),
+    ].join('\n');
+  };
+
+  return { text: render('plain'), markdown: render('markdown'), matrix: { matrix, resumes: resumes.map((r) => r.label), jds: jds.map((j) => j.label), stats } };
+}
+
+/** Appends a distinguishing hint to labels that would otherwise be identical. */
+function disambiguate(items, hintOf) {
+  const counts = new Map();
+  for (const item of items) counts.set(item.label, (counts.get(item.label) || 0) + 1);
+  let index = 0;
+  for (const item of items) {
+    index += 1;
+    if (counts.get(item.label) < 2) continue;
+    const hint = hintOf(item);
+    item.label = hint ? `${item.label} (${hint})` : `${item.label} #${index}`;
   }
-  lines.push('', `  Best single match: ${best.resume} for ${best.jd}, at ${best.score}/100.`);
-  lines.push('  A ">" marks the resume that wins each job.');
+}
 
-  lines.push('', '-'.repeat(34), 'WHAT IT COST', '');
-  lines.push(`  ${stats.model_calls} AI call${stats.model_calls === 1 ? '' : 's'} for ${resumes.length} resume${resumes.length === 1 ? '' : 's'} against ${jds.length} job${jds.length === 1 ? '' : 's'}.`);
-  lines.push(`  A tool that scored each pair separately would have made ${resumes.length * jds.length}.`);
-  lines.push('  We read each document once, then compare the summaries.');
-  if (stats.cache_hits) lines.push(`  ${stats.cache_hits} document(s) were already saved, so they cost nothing.`);
-  lines.push(`  Took ${Date.now() - startedAt}ms.`);
-
-  return { text: lines.join('\n'), matrix: { matrix, resumes: resumes.map((r) => r.label), jds: jds.map((j) => j.label), stats } };
+/** The two or three skills that best characterise a resume, for a label. */
+function topSkills(profile) {
+  const named = (profile.skills || []).filter((s) => s.strength === 'strong').map((s) => s.name);
+  const pool = named.length ? named : (profile.skills || []).map((s) => s.name);
+  return pool.slice(0, 2).join('/');
 }
 
 /** Keep a user-supplied label; replace a generic placeholder with a real one. */
@@ -213,127 +250,156 @@ function betterLabel(label, parsedName) {
   return isPlaceholder && clean ? shorten(clean, 28) : label;
 }
 
-const shorten = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}.` : text);
+const shorten = (text, max) => {
+  const clean = String(text ?? '').trim();
+  if (clean.length <= max) return clean;
+  // Trim back past any dangling punctuation so we never end on "(." or ",…".
+  return `${clean.slice(0, max - 1).replace(/[\s(,\-–—:;.]+$/, '')}…`;
+};
 
 /**
- * Plain text for a chat window.
+ * Telegram MarkdownV2 reserves these, and an unescaped one makes the whole
+ * message fail to send — so every piece of text that came from a resume, a
+ * job ad or the model goes through here before it reaches a template.
+ */
+const mdEscape = (text) => String(text ?? '').replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, '\\$&');
+
+/**
+ * Two renderers, one layout. Telegram gets MarkdownV2 with bold section
+ * headings and monospace blocks (which keep the bars aligned on a phone);
+ * the web widget gets the same structure as plain text.
+ */
+const STYLES = {
+  plain: {
+    esc: (t) => String(t ?? ''),
+    bold: (t) => String(t ?? ''),
+    italic: (t) => String(t ?? ''),
+    heading: (t) => `\n${'-'.repeat(34)}\n${t}\n`,
+    block: (t) => t,
+    quote: (t) => `  "${t}"`,
+  },
+  markdown: {
+    esc: mdEscape,
+    bold: (t) => `*${mdEscape(t)}*`,
+    italic: (t) => `_${mdEscape(t)}_`,
+    heading: (t) => `\n*${mdEscape(t)}*`,
+    // Backticks would close the fence early; nothing else needs escaping here.
+    block: (t) => `\`\`\`\n${String(t).replace(/`/g, "'")}\n\`\`\``,
+    quote: (t) => `_${mdEscape(`"${t}"`)}_`,
+  },
+};
+
+/**
+ * Plain text for a chat window, or MarkdownV2 for Telegram.
  *
  * Written for a final-year student, not for a judge: no "must-have coverage",
- * no "ATS hygiene", no bare credit numbers like 0.8. Every number is followed
- * by what it means, and the message ends by saying what to do next.
+ * no "ATS hygiene", no bare credit numbers. Every number is followed by what
+ * it means, and the message ends by saying what to do next.
  */
-export function formatResult(result) {
+export function formatResult(result, style = 'plain') {
+  const S = STYLES[style] || STYLES.plain;
   const meta = result._meta || {};
   const out = [];
-  const rule = '-'.repeat(34);
 
   // --- headline ---------------------------------------------------------
-  out.push(`${meta.role_title || 'This role'}`);
-  out.push(`Score: ${result.overall_score} out of 100  (${result.verdict} match)`);
+  out.push(S.bold(meta.role_title || 'This role'));
+  out.push(`Score: ${S.bold(`${result.overall_score}/100`)} ${S.esc('—')} ${S.esc(`${result.verdict} match`)}`);
   out.push('');
-  out.push(VERDICT_ADVICE[result.verdict] || '');
+  out.push(S.italic(VERDICT_ADVICE[result.verdict] || ''));
 
   const full = result.matched.filter((m) => m.credit >= CREDIT.semantic).length;
   const partial = result.matched.filter((m) => m.credit > 0 && m.credit < CREDIT.semantic).length;
   if (meta.requirements_total) {
-    out.push(`Of the ${meta.requirements_total} things this job asks for, you fully cover ${full}`
-      + `${partial ? ` and partly cover ${partial} more` : ''}.`);
+    out.push(S.esc(`Of the ${meta.requirements_total} things this job asks for, you fully cover ${full}`
+      + `${partial ? ` and partly cover ${partial} more` : ''}.`));
   }
 
   // --- where the score came from ----------------------------------------
-  out.push('', rule, 'WHERE THE SCORE CAME FROM', '');
   const months = meta.experience || {};
-  out.push(scoreLine('Skills they require', result.sub_scores.must_have_coverage, 'half your score comes from this'));
-  out.push(scoreLine('Skills they prefer', result.sub_scores.nice_to_have_coverage, 'the "nice to have" list'));
-  out.push(scoreLine('Experience', result.sub_scores.experience_fit,
-    months.required_months
-      ? `you have ${readableMonths(months.candidate_months)}, they ask for ${readableMonths(months.required_months)}`
-      : 'this role asks for no set amount'));
-  out.push(scoreLine('Resume formatting', result.sub_scores.ats_hygiene, 'how well an automated scanner can read your file'));
+  out.push(S.heading('WHERE THE SCORE CAME FROM'));
+  out.push(S.block([
+    scoreLine('Skills they require', result.sub_scores.must_have_coverage, 'half of the total score'),
+    scoreLine('Skills they prefer', result.sub_scores.nice_to_have_coverage, 'their "nice to have" list'),
+    scoreLine('Experience', result.sub_scores.experience_fit, months.required_months
+      ? `you have ${readableMonths(months.candidate_months)}, they want ${readableMonths(months.required_months)}`
+      : 'this role asks for no set amount'),
+    scoreLine('Resume formatting', result.sub_scores.ats_hygiene, 'how well a scanner reads your file'),
+  ].join('\n')));
 
-  // --- the differentiator, explained without jargon ----------------------
+  // --- the differentiator -----------------------------------------------
   const semantic = result.matched.filter((m) => m.match_type !== 'exact');
   if (semantic.length) {
-    out.push('', rule, 'COUNTED EVEN THOUGH YOU NEVER USED THEIR WORDS', '');
-    out.push('A keyword scanner gives these zero. We read the evidence:', '');
+    out.push(S.heading('COUNTED EVEN THOUGH YOU NEVER USED THEIR WORDS'));
+    out.push(S.esc('A keyword scanner gives these zero. We read the evidence:'));
     for (const match of semantic.slice(0, 3)) {
-      out.push(`  They want: ${match.requirement}`);
-      // Sometimes the only evidence is the skill name itself, with no
-      // sentence behind it. Saying 'You wrote: "javascript"' reads like a bug.
-      const isSentence = match.evidence.trim().split(/\s+/).length > 3;
-      out.push(isSentence
-        ? `  You wrote: "${shorten(match.evidence, 150)}"`
-        : `  You list:  ${match.evidence}`);
-      out.push(`  ${match.match_type === 'semantic' ? 'That is the same work under a different name.' : 'Related, so it counts for part marks.'}`);
       out.push('');
+      out.push(`${S.bold(match.requirement)} ${S.esc(`— counted ${match.credit} of 1`)}`);
+      const isSentence = String(match.evidence).trim().split(/\s+/).length > 3;
+      out.push(isSentence ? S.quote(shorten(match.evidence, 150)) : S.esc(`You list: ${match.evidence}`));
+      out.push(S.esc(match.match_type === 'semantic'
+        ? 'The same work under a different name.'
+        : 'Related, so it earns part marks.'));
     }
   }
 
   // --- gaps -------------------------------------------------------------
-  // Two different problems, and calling both "missing" is what made the old
-  // output confusing: a skill credited 0.8 above was also listed as missing
-  // below. Absent means it is not there at all; thin means it is there but
-  // nothing on the resume shows it being used.
+  // Absent and thin are different problems. Calling both "missing" is what
+  // made the old output contradict itself.
   const absent = result.gaps.filter((g) => g.credit === 0 && g.severity !== 'minor');
   const thin = result.gaps.filter((g) => g.credit === CREDIT.claimed && g.severity !== 'minor');
 
   if (absent.length) {
-    out.push(rule, "WHAT'S MISSING", '');
+    out.push(S.heading("WHAT'S MISSING"));
     for (const gap of absent.slice(0, 6)) {
-      out.push(`  ${gap.requirement} — ${gap.severity === 'blocking' ? 'they call this essential' : 'they ask for it'}, and it is not on your resume`);
+      out.push(`${S.esc('•')} ${S.bold(gap.requirement)} ${S.esc(`— ${gap.severity === 'blocking' ? 'they call this essential' : 'they ask for it'}`)}`);
     }
-    out.push('');
   }
 
   if (thin.length) {
-    out.push(rule, 'WHERE YOUR EVIDENCE IS THIN', '');
-    out.push('You have these, but nothing on the resume shows you using them,', 'so they scored part marks instead of full:', '');
-    for (const gap of thin.slice(0, 6)) out.push(`  ${gap.requirement}`);
-    out.push('');
+    out.push(S.heading('WHERE YOUR EVIDENCE IS THIN'));
+    out.push(S.esc('Listed on your resume, but nothing shows you using them, so they earned part marks:'));
+    out.push(thin.slice(0, 6).map((g) => S.bold(g.requirement)).join(S.esc(', ')));
   }
 
   // --- courses ----------------------------------------------------------
   if (result.suggested_courses.length) {
-    out.push(rule, 'WHAT TO LEARN', '');
+    out.push(S.heading('WHAT TO LEARN'));
     for (const course of result.suggested_courses.slice(0, 3)) {
-      out.push(`  ${course.title}`);
-      out.push(`    ${course.provider}`);
-      out.push(`    ${course.rationale}`);
       out.push('');
+      out.push(S.bold(course.title));
+      out.push(S.esc(`${course.provider} — closes: ${course.closes_gap}`));
+      if (course.rationale) out.push(S.italic(course.rationale));
     }
   }
 
   // --- rewrites ---------------------------------------------------------
   if (result.resume_improvements.length) {
-    out.push(rule, 'HOW TO IMPROVE YOUR RESUME', '');
+    out.push(S.heading('HOW TO IMPROVE YOUR RESUME'));
     for (const item of result.resume_improvements) {
-      out.push(`  In "${shorten(item.target, 60)}"`);
-      out.push(`    Problem: ${item.issue}`);
-      out.push(`    Try:     ${item.suggested_rewrite}`);
       out.push('');
+      out.push(S.bold(shorten(item.target, 60)));
+      out.push(S.esc(`Problem: ${item.issue}`));
+      out.push(S.esc(`Try: ${item.suggested_rewrite}`));
     }
   }
 
   // --- file problems ----------------------------------------------------
   if (result.ats_issues.length) {
-    out.push(rule, 'PROBLEMS A RESUME SCANNER WILL HIT', '');
-    for (const issue of result.ats_issues.slice(0, 4)) out.push(`  ${issue}`);
-    out.push('');
+    out.push(S.heading('PROBLEMS A RESUME SCANNER WILL HIT'));
+    for (const issue of result.ats_issues.slice(0, 4)) out.push(`${S.esc('•')} ${S.esc(issue)}`);
   }
 
   if (meta.degraded) {
-    out.push(rule);
-    out.push('Heads up: the AI was unreachable, so part of this used simpler');
-    out.push('backup rules. The score is rougher than usual.');
-    out.push('');
+    out.push(S.heading('HEADS UP'));
+    out.push(S.esc('The AI was unreachable, so part of this used simpler backup rules. The score is rougher than usual.'));
   }
 
   // --- what to do next --------------------------------------------------
-  out.push(rule, 'WHAT NOW', '');
-  out.push('  Send another job description to score this same resume');
-  out.push('  against it — that costs nothing extra, your resume is saved.');
-  out.push('  /matrix  compare several resumes and jobs at once');
-  out.push('  /reset   start over with a different resume');
+  out.push(S.heading('WHAT NOW'));
+  out.push(S.esc('Send another job description to score this same resume against it — your resume is saved, so it costs nothing extra.'));
+  out.push('');
+  out.push(`${S.bold('/matrix')} ${S.esc('compare several resumes and jobs at once')}`);
+  out.push(`${S.bold('/reset')} ${S.esc('start over with a different resume')}`);
 
   return out.join('\n');
 }
@@ -344,12 +410,12 @@ const VERDICT_ADVICE = {
   weak: 'As it stands this is a long shot. Fix the gaps first, or aim elsewhere.',
 };
 
-/** "Skills they require   88%  ####------  half your score comes from this" */
+/** Rendered inside a monospace block, so the columns actually line up. */
 function scoreLine(label, value, explanation) {
   const percent = Math.round(value * 100);
   const filled = Math.round(percent / 10);
-  const bar = '#'.repeat(filled) + '.'.repeat(10 - filled);
-  return `  ${label.padEnd(20)} ${String(percent).padStart(3)}%  ${bar}\n     ${explanation}`;
+  const bar = '\u2588'.repeat(filled) + '\u2591'.repeat(10 - filled);
+  return `${label.padEnd(21)}${String(percent).padStart(3)}%  ${bar}\n  ${explanation}`;
 }
 
 function readableMonths(months) {
