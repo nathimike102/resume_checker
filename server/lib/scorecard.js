@@ -133,8 +133,9 @@ export function scorecardSvg(result) {
     courses.forEach((course) => {
       parts.push(`
         <rect x="${pad}" y="${y}" width="${W - pad * 2}" height="42" rx="6" fill="${PALETTE.panel}" stroke="${PALETTE.line}"/>
-        <text x="${pad + 12}" y="${y + 18}" font-size="12.5" font-weight="600" fill="${PALETTE.ink}">${esc(clip(course.title, 52))}</text>
-        <text x="${pad + 12}" y="${y + 33}" font-size="11" fill="${PALETTE.muted}">${esc(clip(course.provider, 60))}</text>`);
+        <text x="${pad + 12}" y="${y + 18}" font-size="12.5" font-weight="600" fill="${PALETTE.ink}">${esc(clip(course.title, 46))}</text>
+        <text x="${pad + 12}" y="${y + 33}" font-size="11" fill="${PALETTE.muted}">${esc(clip(course.provider, 40))}</text>
+        <text x="${W - pad - 12}" y="${y + 26}" font-size="11" text-anchor="end" fill="${PALETTE.accent}">closes: ${esc(clip(course.closes_gap, 34))}</text>`);
       y += 50;
     });
     y += 4;

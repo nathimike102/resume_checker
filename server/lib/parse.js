@@ -43,7 +43,7 @@ ${text.slice(0, 24000)}
 
 async function parseResumeUncached(text, stats) {
   if (USE_STUB) return { ...validateResume(heuristicParseResume(text)), _parsed_by: 'heuristic' };
-  const raw = await askJson(RESUME_PROMPT(text), { system: SYSTEM, schema: RESUME_SCHEMA, stats });
+  const raw = await askJson(RESUME_PROMPT(text), { system: SYSTEM, schema: RESUME_SCHEMA, maxTokens: 3500, stats });
   // Model unreachable or off-schema? Fall back to the offline parser rather
   // than handing the user a blank screen.
   if (raw?._error) {
@@ -55,7 +55,7 @@ async function parseResumeUncached(text, stats) {
 
 async function parseJdUncached(text, stats) {
   if (USE_STUB) return { ...validateJd(heuristicParseJd(text)), _parsed_by: 'heuristic' };
-  const raw = await askJson(JD_PROMPT(text), { system: SYSTEM, schema: JD_SCHEMA, stats });
+  const raw = await askJson(JD_PROMPT(text), { system: SYSTEM, schema: JD_SCHEMA, maxTokens: 2500, stats });
   if (raw?._error) {
     const fallback = validateJd(heuristicParseJd(text));
     return { ...fallback, _fallback: true, _error: raw._error, _parsed_by: 'heuristic-fallback' };

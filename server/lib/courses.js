@@ -15,9 +15,30 @@ const byId = new Map(COURSES.map((course) => [course.id, course]));
 
 export const getCourse = (id) => byId.get(String(id).trim()) || null;
 
-/** Compact list for the prompt — ids and skills only, no prose to copy. */
-export function catalogueForPrompt() {
-  return COURSES.map((c) => `${c.id} | ${c.title} | ${c.provider} | skills: ${c.skills.join(', ')} | ${c.level} | ${c.hours}h`).join('\n');
+const courseLine = (c) => `${c.id} | ${c.title} | ${c.provider} | skills: ${c.skills.join(', ')} | ${c.level} | ${c.hours}h`;
+
+/**
+ * Compact list for the prompt — ids and skills only, no prose to copy.
+ *
+ * Sending all 42 courses cost ~2.5k tokens on every call, which on a
+ * rate-limited tier is the difference between a course list and a 429. When
+ * gaps are known we shortlist by skill overlap and send a fraction of that;
+ * the model still only ever sees real ids, so it still cannot invent one.
+ */
+export function catalogueForPrompt(gapSkills = []) {
+  if (!gapSkills.length) return COURSES.map(courseLine).join('\n');
+
+  const shortlist = new Map();
+  for (const gap of gapSkills) {
+    for (const pick of selectCoursesForGap(gap, 3)) {
+      const course = getCourse(pick.course_id);
+      if (course) shortlist.set(course.id, course);
+    }
+  }
+  // Nothing matched by rules? Fall back to the whole catalogue rather than
+  // handing the model an empty list and guaranteeing no suggestions.
+  if (!shortlist.size) return COURSES.map(courseLine).join('\n');
+  return [...shortlist.values()].map(courseLine).join('\n');
 }
 
 /**

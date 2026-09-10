@@ -32,9 +32,10 @@ export async function matchPair(resume, jd, { withAdvice = true, offlineSemantic
     // Only recommend training for things the candidate genuinely does not
     // have. Suggesting a course for a skill already on the resume — it just
     // lacked a supporting sentence — is noise; that is a rewrite problem.
-    const missing = significant.filter((g) => g.credit === 0);
     const [courses, improvements] = await Promise.all([
-      suggestCourses(missing, stats),
+      // All gaps, not just the significant ones: suggestCourses decides what
+      // is actually learnable. A missing nice-to-have is still a course.
+      suggestCourses(result.gaps, stats),
       suggestImprovements(resume.parsed, jd.parsed, significant, stats),
     ]);
     result.suggested_courses = courses;

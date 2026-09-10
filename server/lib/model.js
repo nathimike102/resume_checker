@@ -52,7 +52,39 @@ export function stripFences(raw) {
 // Each returns plain text and throws on failure; the wrappers below turn a
 // throw into a fallback record so nothing downstream ever sees an exception.
 
+/**
+ * Groq's free tier is 8,000 tokens per minute, and `max_completion_tokens`
+ * counts toward it even when unused — so a 429 is routine, not exceptional,
+ * and it tells us exactly how long to wait. Without this the app fell back to
+ * offline rules mid-conversation and the user saw courses vanish.
+ */
+async function withRateLimitRetry(attempt, tries = 3) {
+  for (let i = 0; i < tries; i += 1) {
+    try {
+      return await attempt();
+    } catch (error) {
+      const wait = retryAfterSeconds(error.message);
+      if (wait === null || i === tries - 1) throw error;
+      console.warn(`[model] rate limited, waiting ${wait.toFixed(1)}s (attempt ${i + 1}/${tries})`);
+      await new Promise((resolve) => setTimeout(resolve, wait * 1000 + 250));
+    }
+  }
+  return null;
+}
+
+/** Reads "Please try again in 11.66s" out of a 429 body. Caps the wait. */
+function retryAfterSeconds(message) {
+  if (!/429|rate limit/i.test(String(message))) return null;
+  const match = String(message).match(/try again in ([\d.]+)\s*s/i);
+  const seconds = match ? Number(match[1]) : 5;
+  return Math.min(seconds, 25);
+}
+
 async function callGroq({ prompt, system, schema, maxTokens }) {
+  return withRateLimitRetry(() => groqRequest({ prompt, system, schema, maxTokens }));
+}
+
+async function groqRequest({ prompt, system, schema, maxTokens }) {
   const response = await fetch(GROQ_URL, {
     method: 'POST',
     headers: {

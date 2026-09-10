@@ -70,6 +70,7 @@ export async function resolveSemantics(profile, jd, stats) {
   const raw = await askJson(semanticPrompt(profile, unresolved), {
     system: SYSTEM,
     schema: SEMANTIC_SCHEMA,
+    maxTokens: 1600,
     stats,
   });
 
