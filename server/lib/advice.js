@@ -4,6 +4,7 @@ import { askJson } from './model.js';
 import { COURSES_SCHEMA, IMPROVEMENTS_SCHEMA } from './jsonSchemas.js';
 import { catalogueForPrompt, materialisePicks, selectCoursesForGap } from './courses.js';
 import { USE_STUB } from './model.js';
+import { CREDIT } from './score.js';
 
 const COURSE_SYSTEM = 'You select training from a fixed catalogue. You may only return course ids that appear in the catalogue given to you.';
 
@@ -57,26 +58,27 @@ ${catalogueForPrompt(targets.map((g) => g.requirement))}`,
 }
 
 /**
- * What is worth learning.
+ * What is worth learning — decided by the credit tier, not by severity.
  *
- * Absent skills first — a course cannot help with something already on the
- * resume. Nice-to-haves count here even though they are "minor" gaps: a
- * missing bonus skill is still something you could go and learn.
+ *   0.0 absent   -> learn it, it is not there at all
+ *   0.5 adjacent -> learn it: Docker is not Kubernetes, and the JD asked for
+ *                   Kubernetes
+ *   0.7 claimed  -> do NOT: they already have it, it is just not evidenced.
+ *                   That is a rewrite problem, and the rewrite section says so.
+ *   0.8 semantic -> do NOT: they have demonstrably done this work
  *
- * If nothing is absent, the honest answer is usually "nothing to study, fix
- * how you evidence it" — but returning an empty list reads as broken, so fall
- * back to the weakest required skills.
+ * An earlier version fell back to "the weakest required skills" whenever
+ * nothing was absent, so a strong match recommended a Machine Learning
+ * Specialization to someone already using PyTorch and transformers. Silence is
+ * better than bad advice — and the report now says why it is silent rather
+ * than just showing nothing.
  */
 function chooseTargets(gaps) {
-  const absent = gaps.filter((g) => g.credit === 0);
-  if (absent.length) {
-    const rank = { blocking: 0, important: 1, minor: 2 };
-    return [...absent].sort((a, b) => rank[a.severity] - rank[b.severity]).slice(0, 8);
-  }
-  return [...gaps]
-    .filter((g) => g.severity !== 'minor')
-    .sort((a, b) => a.credit - b.credit)
-    .slice(0, 3);
+  const rank = { blocking: 0, important: 1, minor: 2 };
+  return gaps
+    .filter((g) => g.credit === 0 || g.credit === CREDIT.adjacent)
+    .sort((a, b) => rank[a.severity] - rank[b.severity] || a.credit - b.credit)
+    .slice(0, 8);
 }
 
 /** "bash (blocking)" -> "bash". Returns '' when it matches no known gap. */

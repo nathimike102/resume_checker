@@ -376,6 +376,13 @@ export function formatResult(result, style = 'plain') {
   }
 
   // --- courses ----------------------------------------------------------
+  if (!result.suggested_courses.length && (absent.length || thin.length)) {
+    out.push(S.heading('WHAT TO LEARN'));
+    out.push(S.esc(thin.length && !absent.length
+      ? 'Nothing, for this role. You already have what they are asking for — what is thin is the evidence, so fix the bullets above rather than taking a course.'
+      : 'Nothing in our catalogue closes these particular gaps. We only suggest courses we actually have, so we would rather say nothing than stretch.'));
+  }
+
   if (result.suggested_courses.length) {
     out.push(S.heading('WHAT TO LEARN'));
     for (const course of result.suggested_courses.slice(0, 3)) {
