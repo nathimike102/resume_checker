@@ -15,6 +15,40 @@ function getClient() {
   return client;
 }
 
+/**
+ * A missing or placeholder key used to fail silently: every call 401'd, the
+ * app fell back to offline rules, and the output still looked plausible — so
+ * you would demo it believing the AI was running. Say it out loud at boot.
+ */
+export function checkCredentials() {
+  if (USE_STUB) {
+    console.log('[model] USE_STUB=1 — offline mode, no API calls, no key needed.');
+    return { ok: true, mode: 'stub' };
+  }
+  const key = (process.env.ANTHROPIC_API_KEY || '').trim();
+  const looksPlaceholder = !key || key.length < 20 || /\.\.\.|paste|your-key|xxxx/i.test(key);
+  if (looksPlaceholder) {
+    console.warn('\n  ANTHROPIC_API_KEY is missing or still the .env.example placeholder.');
+    console.warn('  The app will RUN, but every AI call will fail and fall back to');
+    console.warn('  offline rules — scores will be rougher and flagged "degraded".\n');
+    console.warn('  Fix:  put a real key in .env   (console.anthropic.com -> API keys)');
+    console.warn('  Or:   USE_STUB=1 npm run dev   (offline on purpose, no warning)\n');
+    return { ok: false, mode: 'live', reason: 'key_missing_or_placeholder' };
+  }
+  return { ok: true, mode: 'live' };
+}
+
+// A 401 means the key is wrong, and it will be wrong on every subsequent call.
+// Log the explanation once instead of the same stack 40 times.
+let authWarned = false;
+function noteAuthFailure(error) {
+  if (authWarned || !/401|authentication/i.test(String(error.message))) return;
+  authWarned = true;
+  console.error('\n  Anthropic rejected the API key (401). Every AI call will fail');
+  console.error('  and fall back to offline rules until it is fixed.');
+  console.error('  Check ANTHROPIC_API_KEY in .env, then restart.\n');
+}
+
 // Callers pass a stats object so /api/matrix can prove M+N instead of M*N.
 export function newStats() {
   return { model_calls: 0, cache_hits: 0, rule_resolved: 0, model_resolved: 0, fallbacks: 0 };
@@ -58,6 +92,7 @@ export async function ask(prompt, { system, maxTokens = 2000, stats } = {}) {
     return textOf(response);
   } catch (error) {
     if (stats) stats.fallbacks += 1;
+    noteAuthFailure(error);
     console.error('[model] ask failed:', error.message);
     return '';
   }
@@ -96,6 +131,7 @@ export async function askJson(prompt, { system, schema, maxTokens = 8000, stats 
     }
   } catch (error) {
     if (stats) stats.fallbacks += 1;
+    noteAuthFailure(error);
     console.error('[model] askJson failed:', error.message);
     return { _error: error.name || 'api_error', _raw: String(error.message).slice(0, 300) };
   }

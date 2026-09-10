@@ -28,10 +28,14 @@ export async function matchPair(resume, jd, { withAdvice = true, offlineSemantic
   );
 
   if (withAdvice) {
-    const blocking = result.gaps.filter((g) => g.severity !== 'minor');
+    const significant = result.gaps.filter((g) => g.severity !== 'minor');
+    // Only recommend training for things the candidate genuinely does not
+    // have. Suggesting a course for a skill already on the resume — it just
+    // lacked a supporting sentence — is noise; that is a rewrite problem.
+    const missing = significant.filter((g) => g.credit === 0);
     const [courses, improvements] = await Promise.all([
-      suggestCourses(blocking, stats),
-      suggestImprovements(resume.parsed, jd.parsed, blocking, stats),
+      suggestCourses(missing, stats),
+      suggestImprovements(resume.parsed, jd.parsed, significant, stats),
     ]);
     result.suggested_courses = courses;
     result.resume_improvements = improvements;
@@ -44,6 +48,11 @@ export async function matchPair(resume, jd, { withAdvice = true, offlineSemantic
     resolved_by_rule: semantics.resolved_by_rule,
     resolved_by_model: semantics.resolved_by_model,
     semantic_model_called: semantics.model_called,
+    experience: {
+      candidate_months: resume.parsed.total_experience_months || 0,
+      required_months: jd.parsed.min_experience_months || 0,
+    },
+    requirements_total: (jd.parsed.must_have || []).length + (jd.parsed.nice_to_have || []).length,
     parse_confidence: {
       resume: resume.parsed._parse_confidence,
       jd: jd.parsed._parse_confidence,
