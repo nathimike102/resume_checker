@@ -72,12 +72,38 @@ async function withRateLimitRetry(attempt, tries = 3) {
   return null;
 }
 
-/** Reads "Please try again in 11.66s" out of a 429 body. Caps the wait. */
+/**
+ * Reads "Please try again in 11.66s" out of a 429 body, and returns null when
+ * retrying is pointless.
+ *
+ * Groq enforces both a per-minute and a per-DAY token limit, and reports both
+ * as a 429 with a "try again in Ns" hint. Waiting out a per-minute limit works.
+ * Waiting 9 seconds for a limit that resets tomorrow does not — it just spends
+ * 30 seconds on three doomed attempts before falling back to offline rules, so
+ * every request feels hung. Fail fast on the daily one.
+ */
 function retryAfterSeconds(message) {
-  if (!/429|rate limit/i.test(String(message))) return null;
-  const match = String(message).match(/try again in ([\d.]+)\s*s/i);
+  const text = String(message);
+  if (!/429|rate limit/i.test(text)) return null;
+  if (/per day|\bTPD\b|per-day/i.test(text)) {
+    noteDailyQuotaSpent(text);
+    return null;
+  }
+  const match = text.match(/try again in ([\d.]+)\s*s/i);
   const seconds = match ? Number(match[1]) : 5;
   return Math.min(seconds, 25);
+}
+
+let dailyWarned = false;
+function noteDailyQuotaSpent(text) {
+  if (dailyWarned) return;
+  dailyWarned = true;
+  const used = text.match(/Limit (\d+), Used (\d+)/);
+  console.error('\n  Groq daily token quota is spent'
+    + (used ? ` (${Number(used[2]).toLocaleString()} of ${Number(used[1]).toLocaleString()})` : '') + '.');
+  console.error('  Every AI call will fall back to offline rules until it resets.');
+  console.error('  For a demo right now, run with USE_STUB=1 — it is faster and');
+  console.error('  never degraded. Otherwise raise the tier at console.groq.com.\n');
 }
 
 async function callGroq({ prompt, system, schema, maxTokens }) {
