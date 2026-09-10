@@ -7,6 +7,7 @@ import { router as parseRouter } from './routes/parse.js';
 import { router as matchRouter } from './routes/match.js';
 import { router as matrixRouter, MAX_SIDE } from './routes/matrix.js';
 import { router as evalRouter } from './routes/eval.js';
+import { router as exportRouter } from './routes/export.js';
 import { WebAdapter } from './channels/web.js';
 import { TelegramAdapter } from './channels/telegram.js';
 import { WhatsAppAdapter } from './channels/whatsapp.js';
@@ -43,6 +44,7 @@ app.use('/api/parse', parseRouter);
 app.use('/api/match', matchRouter);
 app.use('/api/matrix', matrixRouter);
 app.use('/api/eval', evalRouter);
+app.use('/api/export', exportRouter);
 
 // Both chat channels drive the same conversation state machine.
 const web = new WebAdapter();

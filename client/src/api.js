@@ -25,6 +25,34 @@ export const match = (resumeText, jdText) => request('/api/match', { resume_text
 export const matrix = (resumes, jds) => request('/api/matrix', { resumes, jds });
 export const runEval = () => request('/api/eval');
 
+/**
+ * Downloads the report as a file. The result object we already hold is posted
+ * back, so nothing is re-scored, no model is called, and what downloads is
+ * exactly what is on screen.
+ */
+export async function downloadReport(result, format) {
+  const response = await fetch(`/api/export/${format}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ result }),
+  });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => ({}));
+    throw new Error(problem.error || `Export failed (${response.status})`);
+  }
+  const blob = await response.blob();
+  const name = (response.headers.get('content-disposition') || '').match(/filename="([^"]+)"/)?.[1]
+    || `fit-report.${format}`;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 /** Files go up as base64 in JSON — one request shape for text and uploads. */
 export function readFileAsBase64(file) {
   return new Promise((resolve, reject) => {

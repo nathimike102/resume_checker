@@ -64,8 +64,9 @@ once Telegram has accepted the token — a typo'd token would otherwise read as
 "on" merely because the variable is set.
 
 **In the chat:** send `/start`, then your resume (PDF, DOCX, or pasted text),
-then a job description. `/matrix` enters multi-mode (up to 5 × 5, `/done` to
-run the grid), `/reset` clears, `/help` lists everything.
+then a job description. `/pdf` or `/docx` sends the report back as a file,
+`/matrix` enters multi-mode (up to 5 × 5, `/done` to run the grid), `/reset`
+clears, `/help` lists everything.
 
 Verified end to end: a real PDF uploaded as a Telegram document parses and
 scores; a genuinely scanned (image-only) PDF is rejected with the
@@ -115,6 +116,23 @@ dependency, so it is testable and cannot fail at demo time. `lib/render.js`
 rasterises it to PNG with `sharp`, which is treated as **optional**: if it is
 missing or fails, the image is skipped and the text report still sends. A
 missing image renderer must never cost you the demo.
+
+---
+
+## Downloading the report
+
+Every fit report can be saved as a **PDF** or a **Word (.docx)** file — `/pdf`
+or `/docx` in the chat, or the buttons above the report in the web UI.
+
+Both are built from the same `MatchResult` by `lib/export.js`, so the file says
+exactly what the bot said; the layout is shared, so the two formats cannot
+drift apart. Nothing is re-scored and no model call is made, which means
+downloading is free and deterministic. The PDF carries real selectable text
+rather than a picture of a report.
+
+`pdfkit` and `docx` are treated as optional in the same way the image renderer
+is: if a library is missing the builder returns null, the endpoint answers 503,
+and the chat says so rather than going quiet.
 
 ---
 
@@ -284,6 +302,9 @@ server/
     parse.js            the two parse prompts, cache-aware
     semantic.js         the one batched judgement call
     advice.js           courses (catalogue-only) + truthful rewrites
+    export.js           the report as PDF (pdfkit) or DOCX (docx)
+    scorecard.js        the report as an SVG card / matrix heatmap
+    render.js           SVG -> PNG via sharp, optional
     pipeline.js         one (resume, JD) pair end to end
     heuristicParse.js   the offline parser that makes USE_STUB real
     conversation.js     the bot's brain, channel-agnostic
@@ -303,4 +324,6 @@ client/                 React + Vite: chat, gauge, gaps, courses, heatmap
 | `POST /api/match` | `{resume_text, jd_text}` → MatchResult |
 | `POST /api/matrix` | `{resumes[], jds[]}` → grid, best-per-job, call stats |
 | `GET /api/eval` | the table above (`?offline=1` forces rules-only) |
+| `POST /api/export/pdf` | `{result}` → a PDF of that report |
+| `POST /api/export/docx` | `{result}` → a Word document of that report |
 | `POST /api/chat` | the web channel; same brain as Telegram |

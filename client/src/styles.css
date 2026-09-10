@@ -113,3 +113,8 @@ button.ghost { background: none; color: var(--accent); border: 1px dashed var(--
 .input-row input, .input-row textarea { width: 100%; border: 1px solid var(--line); border-radius: 4px;
   padding: 7px; font: inherit; margin-bottom: 4px; }
 .input-row textarea { font-size: 13px; resize: vertical; }
+
+.downloads { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.downloads button { padding: 5px 12px; font-size: 13px; }
+.warn-inline { color: var(--blocking); font-size: 12px; }

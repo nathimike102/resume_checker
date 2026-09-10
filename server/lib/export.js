@@ -5,6 +5,8 @@
 // both builders are optional in the same way the image renderer is: if a
 // library is missing, the caller gets null and falls back to text.
 
+import { CREDIT } from './score.js';
+
 const SECTION_GAP = 14;
 const INK = '#16191d';
 const MUTED = '#6b7280';
@@ -32,7 +34,10 @@ export function reportModel(result) {
     ],
     semantic: result.matched.filter((m) => m.match_type !== 'exact'),
     absent: result.gaps.filter((g) => g.credit === 0 && g.severity !== 'minor'),
-    thin: result.gaps.filter((g) => g.credit > 0 && g.credit < 1 && g.severity !== 'minor'),
+    // Only the "claimed" tier: listed but never shown in use. Semantic and
+    // adjacent partials are already explained above, and repeating them here
+    // as "thin evidence" contradicts the section that just credited them.
+    thin: result.gaps.filter((g) => g.credit === CREDIT.claimed && g.severity !== 'minor'),
     courses: result.suggested_courses || [],
     improvements: result.resume_improvements || [],
     atsIssues: result.ats_issues || [],

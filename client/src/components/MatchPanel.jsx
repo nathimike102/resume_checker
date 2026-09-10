@@ -1,6 +1,38 @@
+import { useState } from 'react';
 import ScoreGauge, { SubScores } from './ScoreGauge.jsx';
+import { downloadReport } from '../api.js';
 
 const SEVERITY_ORDER = { blocking: 0, important: 1, minor: 2 };
+
+function DownloadBar({ result }) {
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+
+  const grab = async (format) => {
+    setBusy(format);
+    setError('');
+    try {
+      await downloadReport(result, format);
+    } catch (problem) {
+      setError(problem.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  return (
+    <div className="downloads">
+      <span className="muted">Save this report:</span>
+      <button className="ghost" onClick={() => grab('pdf')} disabled={Boolean(busy)}>
+        {busy === 'pdf' ? 'Building…' : 'PDF'}
+      </button>
+      <button className="ghost" onClick={() => grab('docx')} disabled={Boolean(busy)}>
+        {busy === 'docx' ? 'Building…' : 'Word (.docx)'}
+      </button>
+      {error && <span className="warn-inline">{error}</span>}
+    </div>
+  );
+}
 
 export default function MatchPanel({ result }) {
   if (!result) return null;
@@ -10,6 +42,8 @@ export default function MatchPanel({ result }) {
 
   return (
     <div className="panel">
+      <DownloadBar result={result} />
+
       <header className="panel-head">
         <div>
           <h2>{result._meta?.role_title || 'Fit report'}</h2>

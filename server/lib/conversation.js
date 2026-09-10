@@ -20,6 +20,8 @@ const HELP = [
   '',
   'COMMANDS',
   '',
+  '  /pdf      download this report as a PDF',
+  '  /docx     download this report as a Word document',
   '  /matrix   compare up to 5 resumes against up to 5 jobs at once',
   '  /done     run the grid once you are in /matrix mode',
   '  /reset    forget my resume and start over',
@@ -63,6 +65,17 @@ export async function handleMessage(message) {
     resetSession(chatId);
     return { text: 'Cleared. Send a resume when you are ready.' };
   }
+  if (command === '/pdf' || command === '/docx') {
+    const format = command.slice(1);
+    if (!session.lastResult) {
+      return { text: 'Nothing to export yet. Send a resume and a job description first, then ask for /pdf or /docx.' };
+    }
+    return {
+      text: `Here is your ${format.toUpperCase()} report.`,
+      document: { format, result: session.lastResult },
+    };
+  }
+
   if (command === '/matrix') {
     session.mode = 'matrix';
     session.matrixResumes = [];
@@ -124,6 +137,7 @@ export async function handleMessage(message) {
     { stats },
   );
   session.jd = null; // next JD scores against the same resume
+  session.lastResult = result; // so /pdf and /docx can export it later
   return {
     text: formatResult(result, 'plain'),
     markdown: formatResult(result, 'markdown'),
@@ -398,6 +412,7 @@ export function formatResult(result, style = 'plain') {
   out.push(S.heading('WHAT NOW'));
   out.push(S.esc('Send another job description to score this same resume against it — your resume is saved, so it costs nothing extra.'));
   out.push('');
+  out.push(`${S.bold('/pdf')} ${S.esc('or')} ${S.bold('/docx')} ${S.esc('download this report as a file')}`);
   out.push(`${S.bold('/matrix')} ${S.esc('compare several resumes and jobs at once')}`);
   out.push(`${S.bold('/reset')} ${S.esc('start over with a different resume')}`);
 

@@ -1,6 +1,7 @@
 import { ChannelAdapter } from './base.js';
 import { scorecardSvg, matrixSvg } from '../lib/scorecard.js';
 import { svgToPng } from '../lib/render.js';
+import { buildPdf, buildDocx, fileBase } from '../lib/export.js';
 
 const TELEGRAM_MAX_FILE_BYTES = 20 * 1024 * 1024; // Bot API hard limit on getFile
 const POLL_TIMEOUT_S = 25;
@@ -169,6 +170,15 @@ export class TelegramAdapter extends ChannelAdapter {
     // A picture first, then the detail. The image is built here rather than in
     // conversation.js: the state machine stays channel-agnostic, and a channel
     // that cannot show images simply never asks for one.
+    // An explicit /pdf or /docx request: send the file, not a picture.
+    if (typeof payload === 'object' && payload?.document) {
+      const sent = await this.sendDocument(chatId, payload.document);
+      if (!sent) {
+        await this.call('sendMessage', { chat_id: chatId, text: 'Sorry — I could not build that file. The report above still stands.' });
+      }
+      return;
+    }
+
     const png = await this.buildImage(payload);
     if (png) {
       const caption = typeof payload === 'object' && payload.result
@@ -220,6 +230,25 @@ export class TelegramAdapter extends ChannelAdapter {
       console.warn('[telegram] could not build image:', error.message);
     }
     return null;
+  }
+
+  /** @returns {Promise<boolean>} */
+  async sendDocument(chatId, { format, result }) {
+    try {
+      const file = format === 'docx' ? await buildDocx(result) : await buildPdf(result);
+      if (!file) return false;
+      const form = new FormData();
+      form.append('chat_id', chatId);
+      form.append('caption', `${result.overall_score}/100 — ${result._meta?.role_title || 'fit report'}`);
+      form.append('document', new Blob([file]), `${fileBase(result)}.${format}`);
+      const response = await fetch(`${this.api}/sendDocument`, { method: 'POST', body: form });
+      const data = await response.json();
+      if (!data.ok) throw new Error(data.description);
+      return true;
+    } catch (error) {
+      console.warn('[telegram] sendDocument failed:', error.message);
+      return false;
+    }
   }
 
   async sendPhoto(chatId, png, caption) {
