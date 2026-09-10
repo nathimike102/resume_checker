@@ -1,73 +1,45 @@
-// The ONLY place that talks to the LLM. Two rules:
+// The ONLY place that talks to an LLM. Two rules:
 //   1. It never throws. Callers get a fallback object, never an exception.
 //   2. It never computes a score. Parsing, semantic judgement, prose. That's all.
+//
+// Two providers behind one interface. Groq is OpenAI-compatible, so it is a
+// plain fetch and no extra dependency; Anthropic uses its SDK. Whichever key
+// is present wins, so the rest of the codebase never learns which is in use.
 import Anthropic from '@anthropic-ai/sdk';
 
-const MODEL = process.env.MODEL_ID || 'claude-opus-5';
-// Parsing and equivalence judgement are extraction-shaped tasks: low effort is
-// the right trade at demo latency. Override with MODEL_EFFORT=high if needed.
-const EFFORT = process.env.MODEL_EFFORT || 'low';
 export const USE_STUB = process.env.USE_STUB === '1';
 
-let client = null;
-function getClient() {
-  if (!client) client = new Anthropic({ timeout: 60_000, maxRetries: 1 });
-  return client;
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const isPlaceholder = (key) => !key || key.length < 20 || /\.\.\.|paste|your-key|xxxx/i.test(key);
+
+function resolveProvider() {
+  if (USE_STUB) return 'stub';
+  if (!isPlaceholder(process.env.GROQ_API_KEY)) return 'groq';
+  if (!isPlaceholder(process.env.ANTHROPIC_API_KEY)) return 'anthropic';
+  return 'none';
 }
 
-/**
- * A missing or placeholder key used to fail silently: every call 401'd, the
- * app fell back to offline rules, and the output still looked plausible — so
- * you would demo it believing the AI was running. Say it out loud at boot.
- */
-export function checkCredentials() {
-  if (USE_STUB) {
-    console.log('[model] USE_STUB=1 — offline mode, no API calls, no key needed.');
-    return { ok: true, mode: 'stub' };
-  }
-  const key = (process.env.ANTHROPIC_API_KEY || '').trim();
-  const looksPlaceholder = !key || key.length < 20 || /\.\.\.|paste|your-key|xxxx/i.test(key);
-  if (looksPlaceholder) {
-    console.warn('\n  ANTHROPIC_API_KEY is missing or still the .env.example placeholder.');
-    console.warn('  The app will RUN, but every AI call will fail and fall back to');
-    console.warn('  offline rules — scores will be rougher and flagged "degraded".\n');
-    console.warn('  Fix:  put a real key in .env   (console.anthropic.com -> API keys)');
-    console.warn('  Or:   USE_STUB=1 npm run dev   (offline on purpose, no warning)\n');
-    return { ok: false, mode: 'live', reason: 'key_missing_or_placeholder' };
-  }
-  return { ok: true, mode: 'live' };
-}
+export const PROVIDER = resolveProvider();
 
-// A 401 means the key is wrong, and it will be wrong on every subsequent call.
-// Log the explanation once instead of the same stack 40 times.
-let authWarned = false;
-function noteAuthFailure(error) {
-  if (authWarned || !/401|authentication/i.test(String(error.message))) return;
-  authWarned = true;
-  console.error('\n  Anthropic rejected the API key (401). Every AI call will fail');
-  console.error('  and fall back to offline rules until it is fixed.');
-  console.error('  Check ANTHROPIC_API_KEY in .env, then restart.\n');
-}
+const DEFAULT_MODEL = { groq: 'openai/gpt-oss-120b', anthropic: 'claude-opus-5' };
+const MODEL = process.env.MODEL_ID || DEFAULT_MODEL[PROVIDER] || DEFAULT_MODEL.groq;
+// Parsing and equivalence judgement are extraction tasks: low effort is the
+// right latency/quality trade for a live demo. Raise with MODEL_EFFORT=high.
+const EFFORT = process.env.MODEL_EFFORT || 'low';
+
+let anthropicClient = null;
+const getAnthropic = () => (anthropicClient ||= new Anthropic({ timeout: 60_000, maxRetries: 1 }));
 
 // Callers pass a stats object so /api/matrix can prove M+N instead of M*N.
 export function newStats() {
   return { model_calls: 0, cache_hits: 0, rule_resolved: 0, model_resolved: 0, fallbacks: 0 };
 }
 
-function textOf(response) {
-  return response.content
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text)
-    .join('\n')
-    .trim();
-}
-
-// Models sometimes wrap JSON in ``` fences even when told not to. Strip them.
+/** Models sometimes wrap JSON in ``` fences even when told not to. */
 export function stripFences(raw) {
   const trimmed = String(raw || '').trim();
   const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
   if (fenced) return fenced[1].trim();
-  // Last resort: the outermost {...} or [...] in the string.
   const start = trimmed.search(/[[{]/);
   if (start === -1) return trimmed;
   const open = trimmed[start];
@@ -76,20 +48,63 @@ export function stripFences(raw) {
   return end > start ? trimmed.slice(start, end + 1) : trimmed;
 }
 
+// --- providers ---------------------------------------------------------
+// Each returns plain text and throws on failure; the wrappers below turn a
+// throw into a fallback record so nothing downstream ever sees an exception.
+
+async function callGroq({ prompt, system, schema, maxTokens }) {
+  const response = await fetch(GROQ_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      messages: [
+        ...(system ? [{ role: 'system', content: system }] : []),
+        { role: 'user', content: prompt },
+      ],
+      max_completion_tokens: maxTokens,
+      reasoning_effort: EFFORT,
+      // Constrain the model at decode time rather than asking politely.
+      ...(schema
+        ? { response_format: { type: 'json_schema', json_schema: { name: 'result', strict: true, schema } } }
+        : {}),
+    }),
+    signal: AbortSignal.timeout(90_000),
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(`${response.status} ${data?.error?.message || 'groq request failed'}`);
+  return data.choices?.[0]?.message?.content || '';
+}
+
+async function callAnthropic({ prompt, system, schema, maxTokens }) {
+  const response = await getAnthropic().messages.create({
+    model: MODEL,
+    max_tokens: maxTokens,
+    output_config: {
+      effort: EFFORT,
+      ...(schema ? { format: { type: 'json_schema', schema } } : {}),
+    },
+    ...(system ? { system } : {}),
+    messages: [{ role: 'user', content: prompt }],
+  });
+  if (response.stop_reason === 'refusal') throw new Error('refusal');
+  return response.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+}
+
+const call = (options) => (PROVIDER === 'groq' ? callGroq(options) : callAnthropic(options));
+
+// --- public interface --------------------------------------------------
+
 /** Free-text call. Returns a string; '' on any failure. */
 export async function ask(prompt, { system, maxTokens = 2000, stats } = {}) {
-  if (USE_STUB) return '';
+  if (PROVIDER === 'stub' || PROVIDER === 'none') return '';
   try {
     if (stats) stats.model_calls += 1;
-    const response = await getClient().messages.create({
-      model: MODEL,
-      max_tokens: maxTokens,
-      output_config: { effort: EFFORT },
-      ...(system ? { system } : {}),
-      messages: [{ role: 'user', content: prompt }],
-    });
-    if (response.stop_reason === 'refusal') return '';
-    return textOf(response);
+    return await call({ prompt, system, maxTokens });
   } catch (error) {
     if (stats) stats.fallbacks += 1;
     noteAuthFailure(error);
@@ -99,35 +114,22 @@ export async function ask(prompt, { system, maxTokens = 2000, stats } = {}) {
 }
 
 /**
- * JSON call. `schema` is a JSON Schema passed to structured outputs, so the
- * model is constrained at decode time rather than asked politely for JSON.
- * On any failure returns { _error, _raw } — the caller's validate() turns that
- * into a renderable record. Nothing downstream is allowed to crash.
+ * JSON call. `schema` is a JSON Schema enforced at decode time. On any failure
+ * returns { _error, _raw } — the caller's validate() turns that into a
+ * renderable record. Nothing downstream is allowed to crash.
  */
 export async function askJson(prompt, { system, schema, maxTokens = 8000, stats } = {}) {
-  if (USE_STUB) return { _error: 'stub_mode', _raw: '' };
+  if (PROVIDER === 'stub' || PROVIDER === 'none') {
+    return { _error: PROVIDER === 'stub' ? 'stub_mode' : 'no_api_key', _raw: '' };
+  }
   try {
     if (stats) stats.model_calls += 1;
-    const response = await getClient().messages.create({
-      model: MODEL,
-      max_tokens: maxTokens,
-      output_config: {
-        effort: EFFORT,
-        ...(schema ? { format: { type: 'json_schema', schema } } : {}),
-      },
-      ...(system ? { system } : {}),
-      messages: [{ role: 'user', content: prompt }],
-    });
-    if (response.stop_reason === 'refusal') {
-      if (stats) stats.fallbacks += 1;
-      return { _error: 'refusal', _raw: '' };
-    }
-    const raw = textOf(response);
+    const raw = await call({ prompt, system, schema, maxTokens });
     try {
       return JSON.parse(stripFences(raw));
     } catch {
       if (stats) stats.fallbacks += 1;
-      return { _error: 'unparseable_json', _raw: raw.slice(0, 500) };
+      return { _error: 'unparseable_json', _raw: String(raw).slice(0, 500) };
     }
   } catch (error) {
     if (stats) stats.fallbacks += 1;
@@ -137,4 +139,38 @@ export async function askJson(prompt, { system, schema, maxTokens = 8000, stats 
   }
 }
 
-export const modelInfo = { model: MODEL, effort: EFFORT, stub: USE_STUB };
+// A 401 means the key is wrong, and it will be wrong on every later call.
+// Log the explanation once instead of the same stack forty times.
+let authWarned = false;
+function noteAuthFailure(error) {
+  if (authWarned || !/401|403|authentication|invalid[_ ]api[_ ]key/i.test(String(error.message))) return;
+  authWarned = true;
+  const name = PROVIDER === 'groq' ? 'GROQ_API_KEY' : 'ANTHROPIC_API_KEY';
+  console.error(`\n  The API key was rejected. Every AI call will fail and fall`);
+  console.error(`  back to offline rules until it is fixed.`);
+  console.error(`  Check ${name} in .env, then restart.\n`);
+}
+
+/**
+ * A missing or placeholder key used to fail silently: every call errored, the
+ * app fell back to offline rules, and the output still looked plausible — so
+ * you would demo it believing the AI was running. Say it out loud at boot.
+ */
+export function checkCredentials() {
+  if (PROVIDER === 'stub') {
+    console.log('[model] USE_STUB=1 — offline mode, no API calls, no key needed.');
+    return { ok: true, provider: 'stub' };
+  }
+  if (PROVIDER === 'none') {
+    console.warn('\n  No usable API key found (checked GROQ_API_KEY, ANTHROPIC_API_KEY).');
+    console.warn('  The app will RUN, but every AI call fails and falls back to');
+    console.warn('  offline rules — scores are rougher and flagged "degraded".\n');
+    console.warn('  Fix:  put a real key in .env');
+    console.warn('  Or:   USE_STUB=1 npm run dev   (offline on purpose, no warning)\n');
+    return { ok: false, provider: 'none', reason: 'no_api_key' };
+  }
+  console.log(`[model] provider: ${PROVIDER} · model: ${MODEL} · effort: ${EFFORT}`);
+  return { ok: true, provider: PROVIDER };
+}
+
+export const modelInfo = { provider: PROVIDER, model: MODEL, effort: EFFORT, stub: USE_STUB };

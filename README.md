@@ -18,7 +18,7 @@ npm run setup          # installs server + client deps
 USE_STUB=1 NO_MONGO=1 npm run dev
 
 # live
-cp .env.example .env   # add ANTHROPIC_API_KEY
+cp .env.example .env   # add GROQ_API_KEY (or ANTHROPIC_API_KEY)
 npm run dev
 
 npm run client         # React UI on :5173, proxies /api to :3001
@@ -86,6 +86,37 @@ at a venue) and a web chat widget as the wifi-failure fallback. Both drive the
 and nothing else. WhatsApp is a stub that implements the interface and throws:
 it needs Meta Business verification, which takes days. That is ~40 lines once
 the account exists — see `server/channels/whatsapp.js`.
+
+### Which model
+
+Two providers behind one interface in `lib/model.js`; whichever key is present
+wins, and nothing else in the codebase knows which is in use.
+
+| Provider | Env var | Default model | Notes |
+|---|---|---|---|
+| Groq | `GROQ_API_KEY` | `openai/gpt-oss-120b` | OpenAI-compatible, plain `fetch`, no extra dependency |
+| Anthropic | `ANTHROPIC_API_KEY` | `claude-opus-5` | official SDK |
+
+Both are driven through JSON-schema structured outputs, so the model is
+constrained at decode time rather than asked politely for JSON. If no usable
+key is found the server says so at boot rather than failing silently.
+
+---
+
+## The output has graphics
+
+Every scored result is also drawn as a card and sent to Telegram as a real
+photo: the gauge, the four score components as bars, the semantic matches with
+the sentence they were matched against, what's missing, and what to learn.
+`/matrix` returns a heatmap image with the winning cell per job outlined.
+
+`lib/scorecard.js` builds SVG by hand — pure string building, no canvas, no
+dependency, so it is testable and cannot fail at demo time. `lib/render.js`
+rasterises it to PNG with `sharp`, which is treated as **optional**: if it is
+missing or fails, the image is skipped and the text report still sends. A
+missing image renderer must never cost you the demo.
+
+---
 
 **2. Where the model is allowed to act.** It parses, it judges semantic
 equivalence, and it writes prose. **It never computes the score.** The score is

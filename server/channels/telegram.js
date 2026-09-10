@@ -1,4 +1,6 @@
 import { ChannelAdapter } from './base.js';
+import { scorecardSvg, matrixSvg } from '../lib/scorecard.js';
+import { svgToPng } from '../lib/render.js';
 
 /**
  * Long polling via getUpdates — deliberately. A webhook needs a public HTTPS
@@ -83,9 +85,48 @@ export class TelegramAdapter extends ChannelAdapter {
 
   async send(chatId, payload) {
     const text = typeof payload === 'string' ? payload : payload?.text || '';
+
+    // A picture first, then the detail. The image is built here rather than in
+    // conversation.js: the state machine stays channel-agnostic, and a channel
+    // that cannot show images simply never asks for one.
+    const png = await this.buildImage(payload);
+    if (png) {
+      const caption = typeof payload === 'object' && payload.result
+        ? `${payload.result.overall_score}/100 — ${payload.result.verdict} match`
+        : 'Your fit grid';
+      await this.sendPhoto(chatId, png, caption);
+    }
+
     // Telegram caps a message at 4096 characters.
     for (const chunk of chunkText(text, 3900)) {
       await this.call('sendMessage', { chat_id: chatId, text: chunk });
+    }
+  }
+
+  /** Returns PNG bytes for a scored result or a matrix, else null. */
+  async buildImage(payload) {
+    if (!payload || typeof payload !== 'object') return null;
+    try {
+      if (payload.result) return await svgToPng(scorecardSvg(payload.result), { width: 1080 });
+      if (payload.matrix) return await svgToPng(matrixSvg(payload.matrix), { width: 1100 });
+    } catch (error) {
+      // An image is a bonus, never a reason the user gets nothing.
+      console.warn('[telegram] could not build image:', error.message);
+    }
+    return null;
+  }
+
+  async sendPhoto(chatId, png, caption) {
+    try {
+      const form = new FormData();
+      form.append('chat_id', chatId);
+      form.append('caption', String(caption).slice(0, 1000));
+      form.append('photo', new Blob([png], { type: 'image/png' }), 'fit-report.png');
+      const response = await fetch(`${this.api}/sendPhoto`, { method: 'POST', body: form });
+      const data = await response.json();
+      if (!data.ok) throw new Error(data.description);
+    } catch (error) {
+      console.warn('[telegram] sendPhoto failed, text still sent:', error.message);
     }
   }
 
