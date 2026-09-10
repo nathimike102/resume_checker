@@ -29,6 +29,55 @@ npm test               # scorer unit tests
 
 ---
 
+## Test it on Telegram
+
+The bot token is the only thing needed — you do **not** need an Anthropic key
+to try the Telegram flow, because `USE_STUB=1` runs the offline parser.
+
+```bash
+# 1. Get a token: message @BotFather -> /newbot -> copy the token
+#    It looks like 123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw
+
+# 2. Put it in .env (this file is gitignored - the token never gets committed)
+echo 'TELEGRAM_BOT_TOKEN=paste-your-token-here' >> .env
+
+# 3. Run. Stub mode = no Anthropic key, no network, no Mongo needed.
+USE_STUB=1 NO_MONGO=1 npm run dev
+```
+
+On success the log prints the bot's handle and a direct link:
+
+```
+[telegram] connected as @your_bot — open https://t.me/your_bot and send /start
+```
+
+If the token is wrong you get a plain diagnostic instead, the HTTP server
+stays up, and web chat keeps working:
+
+```
+[telegram] NOT connected: telegram getMe: Unauthorized
+[telegram] that token was rejected — re-copy it from @BotFather
+```
+
+`GET /api/health` reports `channels.telegram.connected`, which is true only
+once Telegram has accepted the token — a typo'd token would otherwise read as
+"on" merely because the variable is set.
+
+**In the chat:** send `/start`, then your resume (PDF, DOCX, or pasted text),
+then a job description. `/matrix` enters multi-mode (up to 5 × 5, `/done` to
+run the grid), `/reset` clears, `/help` lists everything.
+
+Verified end to end: a real PDF uploaded as a Telegram document parses and
+scores; a genuinely scanned (image-only) PDF is rejected with the
+export-a-text-PDF message rather than being scored as garbage.
+
+*Known limitation:* `pdf-parse` can throw `bad XRef entry` on unusually small
+or sparse PDFs that other readers accept. Real resumes from Word, Google Docs,
+LaTeX and LibreOffice all parse correctly; the failure message tells the user
+to re-export, which resolves it.
+
+---
+
 ## The three decisions
 
 **1. Channels.** Telegram (long polling — no webhook, no public URL, no tunnel

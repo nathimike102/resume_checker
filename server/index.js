@@ -16,6 +16,9 @@ import { COURSES } from './lib/courses.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+const telegram = new TelegramAdapter();
+const whatsapp = new WhatsAppAdapter();
+
 app.use(cors());
 app.use(express.json({ limit: '12mb' })); // base64 PDFs arrive in the body
 
@@ -29,8 +32,8 @@ app.get('/api/health', (req, res) => {
     matrix_cap: `${MAX_SIDE}x${MAX_SIDE}`,
     channels: {
       web: true,
-      telegram: Boolean(process.env.TELEGRAM_BOT_TOKEN),
-      whatsapp: false, // requires Meta Business verification
+      telegram: telegram.status(), // connected=true only once Telegram accepts the token
+      whatsapp: { enabled: false, reason: 'requires Meta Business verification' },
     },
     sessions: sessionCount(),
   });
@@ -58,14 +61,17 @@ app.listen(PORT, () => {
 });
 
 // Telegram runs alongside the HTTP server, polling. No token, no bot, no crash.
-const telegram = new TelegramAdapter();
 if (telegram.enabled) {
-  telegram.receive(handleMessage).catch((error) => console.error('[telegram] stopped:', error.message));
+  telegram.receive(handleMessage).catch((error) => {
+    console.error(`[telegram] NOT connected: ${error.message}`);
+    if (/unauthorized/i.test(error.message)) {
+      console.error('[telegram] that token was rejected — re-copy it from @BotFather (format 123456789:AA...)');
+    }
+  });
 } else {
   console.log('[telegram] TELEGRAM_BOT_TOKEN not set — web chat only');
 }
 
-const whatsapp = new WhatsAppAdapter();
 console.log(`[whatsapp] adapter present, enabled=${whatsapp.enabled} (requires Meta Business verification)`);
 
 process.on('SIGINT', async () => {

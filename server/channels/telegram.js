@@ -15,6 +15,11 @@ export class TelegramAdapter extends ChannelAdapter {
     this.api = `https://api.telegram.org/bot${token}`;
     this.offset = 0;
     this.running = false;
+    // Distinct from `enabled`: enabled means a token exists, connected means
+    // Telegram accepted it and we are actually polling. /api/health shows the
+    // second one, because a typo'd token would otherwise read as "on".
+    this.connected = false;
+    this.username = null;
   }
 
   get enabled() {
@@ -35,8 +40,10 @@ export class TelegramAdapter extends ChannelAdapter {
   async receive(onMessage) {
     if (!this.enabled) throw new Error('telegram: TELEGRAM_BOT_TOKEN is not set');
     const me = await this.call('getMe', {});
-    console.log(`[telegram] polling as @${me.username}`);
+    this.username = me.username;
+    this.connected = true;
     this.running = true;
+    console.log(`[telegram] connected as @${me.username} — open https://t.me/${me.username} and send /start`);
 
     while (this.running) {
       try {
@@ -84,6 +91,12 @@ export class TelegramAdapter extends ChannelAdapter {
 
   async stop() {
     this.running = false;
+    this.connected = false;
+  }
+
+  /** What /api/health reports. */
+  status() {
+    return { enabled: this.enabled, connected: this.connected, username: this.username };
   }
 }
 
