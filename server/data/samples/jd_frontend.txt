@@ -1,0 +1,24 @@
+Frontend Engineer (Junior)
+Kettle Labs, Bengaluru - Hybrid
+
+About the role
+You will own the customer-facing dashboard used by 12,000 small businesses to track their inventory. You will work with two designers and one backend engineer.
+
+Responsibilities
+- Build and maintain React components against Figma designs
+- Own the state management layer and keep the bundle size honest
+- Write component tests and fix accessibility issues flagged in audits
+- Work with the backend engineer on API contracts
+
+Requirements
+- Strong JavaScript, including ES6+ and async patterns
+- React, including hooks and component composition
+- TypeScript in a production codebase
+- CSS, including responsive layout and a utility framework
+- Git and pull-request workflow
+- 1+ years of experience, internships count
+
+Nice to have
+- Next.js
+- Testing with Jest or Cypress
+- Some design sense and comfort in Figma

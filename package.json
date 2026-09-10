@@ -1,0 +1,24 @@
+{
+  "name": "resume-jd-fit-bot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Chat bot that scores how well a resume fits a job description, then says what to fix and what to learn.",
+  "scripts": {
+    "dev": "node server/index.js",
+    "stub": "USE_STUB=1 node server/index.js",
+    "test": "node --test server/test/",
+    "client": "npm --prefix client run dev",
+    "setup": "npm install && npm --prefix client install"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.72.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "mammoth": "^1.8.0",
+    "mongoose": "^8.9.5",
+    "node-telegram-bot-api": "^2.1.0",
+    "pdf-parse": "^1.1.1"
+  }
+}

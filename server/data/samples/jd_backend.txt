@@ -1,0 +1,24 @@
+Backend Engineer (Junior)
+Farebox, Remote (India)
+
+About the role
+Farebox processes bookings for 300 travel operators. You will work on the booking service: the part that has to be correct, fast, and never lose a write.
+
+Responsibilities
+- Design and build REST APIs in Node.js
+- Model data in MongoDB and keep queries indexed
+- Work on our event-driven notification system
+- Take part in on-call rotation after your first three months
+
+Requirements
+- Node.js and Express in production
+- REST API design
+- MongoDB or another NoSQL database
+- Event-driven systems: queues, pub/sub or streaming
+- Git, code review, and writing tests
+- 1+ years of experience, internships count
+
+Nice to have
+- Docker
+- Redis
+- Experience with WebSockets

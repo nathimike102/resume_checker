@@ -1,0 +1,44 @@
+{
+  "_note": "15 hand-labelled (resume, JD) pairs. Labelled by reading the documents BEFORE the scorer existed — that ordering is the point, otherwise the eval measures nothing. n=15 is small and the numbers are indicative, not significant.",
+  "_label_rubric": {
+    "strong": "I would send this resume to this job today.",
+    "moderate": "Worth sending, but there is a named gap the candidate should expect to be asked about.",
+    "weak": "Sending this is a waste of the application; the core of the role is missing."
+  },
+  "resumes": [
+    { "id": "r_fullstack", "label": "Full-stack version", "file": "samples/resume_fullstack.txt" },
+    { "id": "r_ml", "label": "ML version", "file": "samples/resume_ml.txt" },
+    { "id": "r_devops", "label": "DevOps candidate", "file": "samples/resume_devops.txt" }
+  ],
+  "jds": [
+    { "id": "j_frontend", "label": "Frontend Engineer", "file": "samples/jd_frontend.txt" },
+    { "id": "j_backend", "label": "Backend Engineer", "file": "samples/jd_backend.txt" },
+    { "id": "j_ml", "label": "ML Engineer", "file": "samples/jd_ml.txt" },
+    { "id": "j_devops", "label": "DevOps Engineer", "file": "samples/jd_devops.txt" },
+    { "id": "j_intern", "label": "Full-Stack Intern", "file": "samples/jd_fullstack_intern.txt" }
+  ],
+  "pairs": [
+    { "resume_id": "r_fullstack", "jd_id": "j_frontend", "label": "moderate", "why": "React, Redux, Tailwind and real component work, but no TypeScript, which the JD lists as required." },
+    { "resume_id": "r_fullstack", "jd_id": "j_backend", "label": "strong", "why": "Node, Express, MongoDB, REST and WebSockets against an event-driven requirement. This is the job." },
+    { "resume_id": "r_fullstack", "jd_id": "j_ml", "label": "weak", "why": "No Python, no modelling work of any kind." },
+    { "resume_id": "r_fullstack", "jd_id": "j_devops", "label": "weak", "why": "Docker and GitHub Actions only. No Kubernetes, no AWS, and well under the experience bar." },
+    { "resume_id": "r_fullstack", "jd_id": "j_intern", "label": "strong", "why": "Every must-have present and the role asks for no prior experience." },
+
+    { "resume_id": "r_ml", "jd_id": "j_frontend", "label": "weak", "why": "React appears once on an old project; no CSS, no TypeScript, no component work to point at." },
+    { "resume_id": "r_ml", "jd_id": "j_backend", "label": "moderate", "why": "Flask API and SQL show real backend instincts, but the stack asked for is Node/Express/Mongo." },
+    { "resume_id": "r_ml", "jd_id": "j_ml", "label": "strong", "why": "PyTorch, transformers, pandas, evaluation discipline and a served model. Direct hit." },
+    { "resume_id": "r_ml", "jd_id": "j_devops", "label": "weak", "why": "Linux and Git only against a Kubernetes-in-production requirement." },
+    { "resume_id": "r_ml", "jd_id": "j_intern", "label": "moderate", "why": "JavaScript, React and Node.js are there via the MERN project, but thinly evidenced next to the ML work." },
+
+    { "resume_id": "r_devops", "jd_id": "j_frontend", "label": "weak", "why": "No frontend work at all." },
+    { "resume_id": "r_devops", "jd_id": "j_backend", "label": "weak", "why": "Go and Python tooling is real backend instinct, but none of the required stack is present." },
+    { "resume_id": "r_devops", "jd_id": "j_ml", "label": "weak", "why": "Python appears as a scripting language; no modelling." },
+    { "resume_id": "r_devops", "jd_id": "j_devops", "label": "strong", "why": "Kubernetes, Docker, Jenkins, AWS, Terraform, Linux. Only shortfall is 12 months against 24." },
+    { "resume_id": "r_devops", "jd_id": "j_intern", "label": "weak", "why": "The three must-haves — JavaScript, React, Node — are all absent." }
+  ],
+  "rankings": [
+    { "resume_id": "r_fullstack", "order": ["j_backend", "j_intern", "j_frontend", "j_devops", "j_ml"] },
+    { "resume_id": "r_ml", "order": ["j_ml", "j_intern", "j_backend", "j_frontend", "j_devops"] },
+    { "resume_id": "r_devops", "order": ["j_devops", "j_backend", "j_intern", "j_frontend", "j_ml"] }
+  ]
+}

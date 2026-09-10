@@ -1,0 +1,25 @@
+Ananya Rao
+ananya.rao@example.com | +91 98765 43210 | github.com/ananyarao | linkedin.com/in/ananyarao
+
+EDUCATION
+B.Tech Computer Science, PES University, Bengaluru, 2026
+CGPA 8.6 / 10
+
+EXPERIENCE
+Backend Engineering Intern at Zolo Technologies, Jun 2024 - Dec 2024
+- Built a real-time chat feature over WebSockets that held 3,000 concurrent connections during peak hours
+- Wrote 14 REST endpoints in Express backed by MongoDB, including pagination and filtering for the orders list
+- Cut the orders API p95 latency from 820ms to 240ms by adding compound indexes and a Redis read cache
+- Containerised the service with Docker and wrote the docker-compose file the team used locally
+- Reviewed pull requests and wrote Jest tests covering the payments module
+
+PROJECTS
+Oryx - React and Redux dashboard for logistics tracking, styled with Tailwind, deployed on Render
+Mess Mate - MERN app used by 400 hostel students to book meals, with JWT auth and a Node cron job for reminders
+Commit Pulse - Node script using GitHub Actions to post a weekly repository digest to Slack
+
+SKILLS
+JavaScript, React, Redux, Node.js, Express, MongoDB, PostgreSQL, HTML, CSS, Tailwind, Git, GitHub Actions, Docker, Jest, REST, WebSockets, Linux
+
+ACHIEVEMENTS
+Runner-up, PES Hackathon 2024 (team of 4)

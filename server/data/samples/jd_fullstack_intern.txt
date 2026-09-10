@@ -1,0 +1,22 @@
+Full-Stack Engineering Intern
+Beacon Studio, Bengaluru - 6 month internship
+
+About the role
+A six-month internship on a small team. You will ship real features to the internal tools our operations team uses every day.
+
+Responsibilities
+- Build features across the stack, front to back
+- Fix bugs reported by the operations team
+- Write the occasional script to clean up data
+
+Requirements
+- JavaScript
+- React or another component framework
+- Node.js
+- Git
+- Final-year student or recent graduate. No prior industry experience required.
+
+Nice to have
+- MongoDB or PostgreSQL
+- Any exposure to Docker
+- A personal project you can talk about

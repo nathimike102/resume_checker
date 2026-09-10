@@ -1,0 +1,24 @@
+DevOps Engineer
+Northgate Cloud, Pune - On-site
+
+About the role
+You will keep 40 microservices running across three environments and own the deployment pipeline that ships them.
+
+Responsibilities
+- Own and extend our Kubernetes clusters
+- Maintain and improve CI/CD pipelines
+- Manage AWS infrastructure as code
+- Take primary on-call for platform incidents
+
+Requirements
+- Kubernetes in production, not just locally
+- Docker
+- CI/CD pipelines: Jenkins, GitHub Actions or GitLab CI
+- AWS: EC2, S3, IAM, VPC
+- Linux administration and Bash
+- 2+ years of experience
+
+Nice to have
+- Terraform
+- Prometheus and Grafana
+- Go or Python for tooling

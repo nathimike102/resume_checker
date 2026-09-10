@@ -1,0 +1,23 @@
+Machine Learning Engineer (Junior)
+Sift Analytics, Hyderabad
+
+About the role
+You will work on the models that classify and route 2 million customer messages a month.
+
+Responsibilities
+- Train, evaluate and ship classification models
+- Own the data preparation pipeline end to end
+- Run error analysis and report findings to product
+
+Requirements
+- Python
+- Machine learning fundamentals: train/test discipline, evaluation metrics, overfitting
+- PyTorch or TensorFlow
+- NLP, including transformers and embeddings
+- pandas and NumPy
+- 1+ years of experience, internships and research count
+
+Nice to have
+- Hugging Face ecosystem
+- SQL
+- Experience serving a model behind an API

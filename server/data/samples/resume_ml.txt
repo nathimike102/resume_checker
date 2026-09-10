@@ -1,0 +1,26 @@
+Ananya Rao
+ananya.rao@example.com | +91 98765 43210 | github.com/ananyarao | linkedin.com/in/ananyarao
+
+EDUCATION
+B.Tech Computer Science, PES University, Bengaluru, 2026
+CGPA 8.6 / 10
+Relevant coursework: Machine Learning, Linear Algebra, Probability, Data Structures
+
+EXPERIENCE
+Research Intern at PES Centre for Data Sciences, Jan 2024 - Jun 2024
+- Fine-tuned a BERT classifier on 40,000 labelled support tickets, reaching 0.88 macro F1
+- Built the preprocessing pipeline in pandas and NumPy, including deduplication and stratified splits
+- Ran ablations in PyTorch across three learning rates and reported results to the lab weekly
+- Served the model behind a Flask endpoint so the product team could test it
+
+PROJECTS
+Sentiment Radar - PyTorch LSTM and a fine-tuned Hugging Face transformer compared on Indian code-mixed tweets
+Doc Sift - retrieval-augmented question answering over lecture notes using embeddings and a vector store
+Churn Model - scikit-learn gradient boosting model with feature importance analysis, notebook published on GitHub
+Mess Mate - MERN app used by 400 hostel students to book meals, built with React and Node.js during first year
+
+SKILLS
+Python, PyTorch, TensorFlow, scikit-learn, pandas, NumPy, Matplotlib, Hugging Face, Transformers, NLP, SQL, Flask, Git, Jupyter, Linux, JavaScript, React, Node.js
+
+ACHIEVEMENTS
+Best poster, PES Research Showcase 2024

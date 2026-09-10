@@ -1,0 +1,24 @@
+Rohit Menon
+rohit.menon@example.com | +91 90123 45678 | github.com/rohitmenon
+
+EDUCATION
+B.E. Information Technology, VIT Vellore, 2025
+
+EXPERIENCE
+Cloud Operations Intern at Northwind Systems, Jul 2023 - Jul 2024
+- Managed 26 EC2 instances and migrated 9 of them to Auto Scaling groups behind an Application Load Balancer
+- Wrote Jenkins pipelines that build, test and deploy three services on every merge to main
+- Authored Terraform modules for VPC, subnets and security groups, replacing manual console changes
+- Reduced nightly batch job failures from 12 per week to 1 by adding retries and CloudWatch alarms
+- Wrote runbooks and on-call documentation for the platform team
+
+PROJECTS
+Kube Lab - three-node Kubernetes cluster on bare metal, with Helm charts for a sample microservice
+Log Pipe - Bash and Python tooling that ships nginx logs to S3 and queries them with Athena
+Uptime Bot - Go service that pings 40 endpoints and posts incidents to Slack
+
+SKILLS
+AWS, EC2, S3, IAM, Terraform, Docker, Kubernetes, Jenkins, GitHub Actions, Linux, Bash, Python, Go, Nginx, Prometheus, Grafana, CI/CD, Git
+
+CERTIFICATIONS
+AWS Certified Cloud Practitioner, 2023
